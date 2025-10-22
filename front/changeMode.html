@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Trocar Modo - Chat Minerv@s</title>
+<link href="style.css" rel="stylesheet" />
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+
+</head>
+<body>
+  <h2>Modo atual: <span id="currentMode">...</span></h2>
+  <button id="toggleModeButton">Trocar para Humano</button>
+
+  <div id="chatSection" class="chat-container" style="display:none;">
+    <!-- Chat container -->
+  </div>
+
+  <div class="input-area" id="inputArea" style="display:none;">
+    <input id="userInput" type="text" placeholder="Digite sua mensagem..." />
+    <button id="sendButton" >Enviar</button>
+  </div>
+
+<script>
+    const API_BASE = "http://192.168.0.80:3000";
+
+  const currentModeSpan = document.getElementById('currentMode');
+  const toggleModeButton = document.getElementById('toggleModeButton');
+  const chatSection = document.getElementById('chatSection');
+  const inputArea = document.getElementById('inputArea');
+  const userInput = document.getElementById('userInput');
+  const sendButton = document.getElementById('sendButton');
+
+  let currentMode = null;
+  let socket = null;
+
+function addMessage(text, sender) {
+  const div = document.createElement('div');
+  div.classList.add('message');
+
+  // inverter a lógica do sender para classe e texto
+  if (sender === 'user') {
+    div.classList.add('ai'); // mensagem do usuário vai ficar com classe 'ai' (ex: cor azul)
+  } else {
+    div.classList.add('user'); // mensagem do humano/IA fica 'user' (ex: cor diferente)
+    
+  }
+  div.textContent = text;
+  chatSection.appendChild(div);
+  chatSection.scrollTop = chatSection.scrollHeight;
+}
+
+
+  async function fetchMode() {
+    const res = await fetch(API_BASE + '/api/mode');
+    const data = await res.json();
+    currentMode = data.mode;
+    currentModeSpan.textContent = currentMode;
+    toggleModeButton.textContent = currentMode === 'AI' ? 'Trocar para Humano' : 'Trocar para IA';
+
+    if (currentMode === 'Humano') {
+      chatSection.style.display = 'flex';
+      inputArea.style.display = 'grid';
+      startSocket();
+    } else {
+      chatSection.style.display = 'none';
+      inputArea.style.display = 'none';
+      if (socket) {
+        socket.disconnect();
+        socket = null;
+      }
+    }
+  }
+
+  toggleModeButton.addEventListener('click', async () => {
+  const novoModo = currentMode === 'AI' ? 'Humano' : 'AI';
+  console.log('Tentando mudar para:', novoModo);
+
+  try {
+    const res = await fetch(API_BASE + '/api/mode', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ mode: novoModo }),
+    });
+
+    console.log('Resposta do servidor:', res.status);
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`HTTP error! status: ${res.status} - ${errText}`);
+    }
+
+    const data = await res.json();
+    console.log('Dados recebidos:', data);
+
+    if (data.success) {
+      currentMode = data.mode;
+      currentModeSpan.textContent = currentMode;
+      toggleModeButton.textContent = currentMode === 'AI' ? 'Trocar para Humano' : 'Trocar para IA';
+
+      if (currentMode === 'Humano') {
+        chatSection.style.display = 'flex';
+        inputArea.style.display = 'grid';
+        startSocket();
+      } else {
+        chatSection.style.display = 'none';
+        inputArea.style.display = 'none';
+        if (socket) {
+          socket.disconnect();
+          socket = null;
+        }
+      }
+    }
+  } catch (err) {
+    alert(err.message);
+    console.error(err);
+  }
+});
+
+  function startSocket() {
+    socket = io(API_BASE);
+    socket.emit('register', 'human');
+
+    socket.on('incoming_user_message', (msg) => {
+      addMessage(msg, 'user');
+    });
+
+    socket.on('bot_response', (msg) => {
+      addMessage(msg, 'ai');
+    });
+
+    socket.on('error_message', (msg) => {
+      alert(msg);
+    });
+  }
+
+  sendButton.addEventListener('click', () => {
+    const msg = userInput.value.trim();
+    if (!msg) return;
+    addMessage(msg, 'ai');
+    if (socket) {
+      socket.emit('human_response', msg);
+    }
+    userInput.value = '';
+  });
+
+  fetchMode();
+</script>
+</body>
+</html>

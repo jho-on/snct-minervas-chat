@@ -1,65 +1,116 @@
-const sendButton = document.getElementById('sendButton');
-const userInput = document.getElementById('userInput');
-const chatContainer = document.getElementById('chatContainer');
-const spinner = document.getElementById('loadingSpinner');
+const API_BASE = "http://localhost:3000";
 
-sendButton.addEventListener('click', async () => {
-    userInput.disabled = true;
-    const message = userInput.value.trim();
-    if (!message) return;
+const sendButton = document.getElementById("sendButton");
+const userInput = document.getElementById("userInput");
+const chatContainer = document.getElementById("chatContainer");
+const spinner = document.getElementById("loadingSpinner");
+const guessButton = document.getElementById("guessButton");
 
-    const userMessage = document.createElement('div');
-    userMessage.className = 'message user';
-    userMessage.textContent = message;
-    chatContainer.appendChild(userMessage);
+let currentMode = null;
+let socket = null;
 
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+function addMessage(text, sender) {
+  const msgDiv = document.createElement("div");
+  msgDiv.className = `message ${sender}`;
+  msgDiv.textContent = text;
+  chatContainer.appendChild(msgDiv);
+  chatContainer.scrollTop = chatContainer.scrollHeight;
+}
 
-    userInput.value = '';
+async function fetchCurrentMode() {
+  try {
+    const res = await fetch(`${API_BASE}/api/mode`);
+    const data = await res.json();
+    currentMode = data.mode;
 
-    spinner.style.display = "block"
+    console.log("Modo atual:", currentMode);
 
-    try {
-        const response = await fetch('http://localhost:3000/api/gemini', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ prompt: message })
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        
-        const delay = Math.floor(Math.random() * 4 + 3) * 1000; // esperar para ser mais crível
-        setTimeout(() => {
-            spinner.style.display = "none";
-
-            const aiMessage = document.createElement('div');
-            aiMessage.className = 'message ai';
-            aiMessage.textContent = data.text;
-            chatContainer.appendChild(aiMessage);
-
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-            userInput.disabled = false;
-        }, delay);
-    } catch (error) {
-        console.error('Error:', error);
-        spinner.style.display = "none";
-        
-        const errorMessage = document.createElement('div');
-        errorMessage.className = 'message ai';
-        errorMessage.textContent = '[Erro] não foi possível conseguir uma resposta.';
-        chatContainer.appendChild(errorMessage);
+    if (currentMode === "Humano") {
+      initSocket();
+    } else {
+      if (socket) {
+        socket.disconnect();
+        socket = null;
+      }
     }
+  } catch (err) {
+    console.error("Erro ao buscar modo atual:", err);
+  }
+}
+
+function initSocket() {
+  socket = io(API_BASE);
+  socket.emit("register", "user");
+
+  socket.on("bot_response", (msg) => {
+    spinner.style.display = "none";
+    addMessage(`${msg}`, "ai");
+    restoreUI();
+  });
+
+  socket.on("error_message", (msg) => {
+    spinner.style.display = "none";
+    addMessage(`[Erro] ${msg}`, "ai");
+    restoreUI();
+  });
+}
+
+function restoreUI() {
+  userInput.disabled = false;
+  if (guessButton) guessButton.style.display = "inline-block";
+  userInput.style.display = "inline-block";
+  sendButton.style.display = "inline-block";
+}
+
+sendButton.addEventListener("click", async () => {
+  const message = userInput.value.trim();
+  if (!message) return;
+
+  userInput.disabled = true;
+  if (guessButton) guessButton.style.display = "none";
+  userInput.style.display = "none";
+  sendButton.style.display = "none";
+
+  addMessage(`${message}`, "user");
+  userInput.value = "";
+  spinner.style.display = "block";
+
+  if (currentMode === "Humano" && socket) {
+    socket.emit("user_message", message);
+  } else {
+    try {
+      const response = await fetch(`${API_BASE}/api/gemini`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ prompt: message }),
+      });
+
+      if (!response.ok) throw new Error(`Erro ${response.status}`);
+
+      const data = await response.json();
+
+      const delay = Math.floor(Math.random() * 4 + 3) * 1000;
+      setTimeout(() => {
+        spinner.style.display = "none";
+        addMessage(`${data.text}`, "ai");
+        restoreUI();
+      }, delay);
+    } catch (err) {
+      console.error("Erro na IA:", err);
+      spinner.style.display = "none";
+      addMessage("[Erro] não foi possível conseguir uma resposta.", "ai");
+      restoreUI();
+    }
+  }
 });
 
-userInput.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') {
+userInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
     event.preventDefault();
     sendButton.click();
   }
 });
+
+fetchCurrentMode();

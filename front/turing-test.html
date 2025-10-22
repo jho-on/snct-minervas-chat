@@ -10,19 +10,21 @@
     <title>Chat Minerv@s - SNCT</title>
 </head>
 <body>
-    <div id="chatContainer" class="chat-container"></div>
+  <div id="chatContainer" class="chat-container"></div>
 
-    <div id="loadingSpinner" style="display: none; margin-top: 10px;">
-        <img src="./assets/loading.svg" alt="loadingSpinner" />
-    </div>
+  <div id="loadingSpinner" style="display: none; margin-top: 10px;">
+      <img src="./assets/loading.svg" alt="loadingSpinner" />
+  </div>
 
-    <div class="input-area">
-        <input id="userInput" type="text" placeholder="Digite sua mensagem..." />
-        <button id="sendButton">Enviar</button>
-    </div>
+  <div class="input-area">
+      <input id="userInput" type="text" placeholder="Digite sua mensagem..." />
+      <button id="sendButton">Enviar</button>
+  </div>
 
-    <a href="form.html">Com quem estou conversando?</a>
+  <button id="guessButton" onclick="window.location = 'form.html'">Quem está falando?</button>
 
-    <script src="script.js"></script>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <script src="script.js"></script>
 </body>
+
 </html>
